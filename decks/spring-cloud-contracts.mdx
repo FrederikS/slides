@@ -1,0 +1,60 @@
+import myTheme from "../src/theme";
+export const theme = myTheme;
+
+# Spring Cloud Contracts
+
+---
+
+## What?
+
+- facilitates contract testing approach
+- verifies integration between applications within your system
+- contracts define integration points between producer and consumer
+- supports multiple DSL for contract definitions (Groovy, Java, Kotlin, YAML)
+
+---
+
+## How?
+
+- generates HTTP/messaging stubs for client/consumer development, doing exactly
+  what the actual server/producer implementation does
+- provides a way to publish changes in contracts, immediately visible in both
+  sides
+- generates boilerplate test code, used for verification of the server/producer
+  implementation
+
+---
+
+## Why?
+
+- very fast feedback
+- no infrastructure required
+- promotes ATDD (acceptance test-driven development) in microservice-based
+  architectural style
+
+---
+
+## REST API Example
+
+---
+
+## Contracts
+
+```yaml
+description: Represents a successful scenario of getting a list of foo
+request:
+  method: GET
+  url: /foo
+  headers:
+    Accept: application/json
+response:
+  status: 200
+  bodyFromFile: response.json
+  headers:
+    Content-Type: application/json
+  matchers:
+    body:
+      - path: $[*].bar
+        type: by_regex
+        predefined: non_blank
+```

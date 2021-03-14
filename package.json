@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "name": "decks",
+  "version": "4.1.1",
+  "scripts": {
+    "start": "mdx-deck decks/*",
+    "build": "mdx-deck build decks/*",
+    "help": "mdx-deck"
+  },
+  "devDependencies": {
+    "mdx-deck": "^4.1.1"
+  }
+}
