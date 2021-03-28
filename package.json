@@ -3,11 +3,13 @@
   "name": "decks",
   "version": "4.1.1",
   "scripts": {
-    "start": "mdx-deck decks/*",
-    "build": "mdx-deck build decks/*",
+    "start": "mdx-deck decks/**/*",
+    "build": "mdx-deck build decks/**/deck.mdx",
     "help": "mdx-deck"
   },
   "devDependencies": {
-    "mdx-deck": "^4.1.1"
+    "highlight.js": "^10.7.1",
+    "mdx-deck": "^4.1.1",
+    "react-syntax-highlighter": "^15.4.3"
   }
 }

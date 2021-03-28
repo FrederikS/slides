@@ -1,6 +1,9 @@
 import React from "react";
 import { themes } from "mdx-deck";
-import { Prism } from "react-syntax-highlighter";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import githubStyle from "react-syntax-highlighter/dist/esm/styles/prism/ghcolors";
+
+githubStyle["comment"]["fontStyle"] = "normal";
 
 const getLanguage = (className) => {
   const match = /language-(\w*)/.exec(className || "language-javascript");
@@ -14,8 +17,25 @@ const getLanguage = (className) => {
 const pre = (props) => props.children;
 
 const code = (props) => {
+  const childrenWithoutEndingNewLine = props.children.substring(
+    0,
+    props.children.length - 1
+  );
   const language = getLanguage(props.className);
-  return <Prism language={language} {...props} showLineNumbers />;
+  return (
+    <SyntaxHighlighter
+      style={githubStyle}
+      language={language}
+      customStyle={{
+        fontSize: ".7em",
+        width: "100%",
+        padding: ".5em"
+      }}
+      showLineNumbers
+    >
+      {childrenWithoutEndingNewLine}
+    </SyntaxHighlighter>
+  );
 };
 
 export default {
@@ -34,12 +54,12 @@ export default {
     li: {
       margin: ".5em",
     },
-    code: {
-      fontSize: ".5em",
-    },
     Slide: {
-      padding: "0 10%"
-    }
+      padding: "0 10%",
+      "@media screen and (min-width: 1450px)": {
+        padding: "0 25%",
+      },
+    },
   },
   components: {
     pre,
