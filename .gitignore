@@ -149,5 +149,6 @@ sketch
 !.vscode/extensions.json
 *.code-workspace
 .history
+public
 
 # End of https://www.toptal.com/developers/gitignore/api/vscode,node,react
