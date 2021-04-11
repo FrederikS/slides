@@ -3,8 +3,8 @@
   "name": "decks",
   "version": "4.1.1",
   "scripts": {
-    "start": "gatsby develop",
-    "build": "mdx-deck build decks/**/deck.mdx"
+    "start": "./node_modules/gatsby-cli/cli.js develop",
+    "build": "./node_modules/gatsby-cli/cli.js build"
   },
   "dependencies": {
     "@fontsource/poppins": "^4.2.2",
