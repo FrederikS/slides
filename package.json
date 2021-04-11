@@ -1,10 +1,10 @@
 {
   "private": true,
-  "name": "decks",
+  "name": "slides",
   "version": "4.1.1",
   "scripts": {
-    "start": "./node_modules/gatsby-cli/cli.js develop",
-    "build": "./node_modules/gatsby-cli/cli.js build"
+    "start": "gatsby develop",
+    "build": "gatsby build --prefix-paths"
   },
   "dependencies": {
     "@fontsource/poppins": "^4.2.2",
