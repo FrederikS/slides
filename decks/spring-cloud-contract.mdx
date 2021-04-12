@@ -72,6 +72,7 @@ public class ProducerApplication {
             .POST("/books", accept(APPLICATION_JSON), bookHandler::create)
             .build();
   }
+
 }
 ```
 
@@ -171,7 +172,7 @@ class BaseProducerTest {
 public class BooksTest extends BaseProducerTest {
 
   @Test
-	public void validate_post_book_without_title() throws Exception {
+  public void validate_post_book_without_title() throws Exception {
     // given:
     WebTestClientRequestSpecification request = given()
         .header("Content-Type", "application/json")
@@ -183,7 +184,7 @@ public class BooksTest extends BaseProducerTest {
 
     // then:
     assertThat(response.statusCode()).isEqualTo(400);
-	}
+  }
 
 }
 ```
@@ -313,13 +314,12 @@ class BookApiClientTest {
   <version>3.0.2</version>
   <extensions>true</extensions>
   <configuration>
-    <skip>true</skip>
     <contractsMode>LOCAL</contractsMode>
     <stubs>com.example:producer:0.0.1-SNAPSHOT:stubs:8080</stubs>
   </configuration>
 </plugin>
 
-<!-- Usage: mvn spring-cloud-contract:run -->
+<!-- Usage: mvn spring-cloud-contract:run -Dspring.cloud.contract.verifier.skip=false -->
 ```
 
 ```yaml
