@@ -171,11 +171,11 @@ class BaseProducerTest {
 public class BooksTest extends BaseProducerTest {
 
   @Test
-  public void validate_post_book_without_title() throws Exception {
+	public void validate_post_book_without_title() throws Exception {
     // given:
     WebTestClientRequestSpecification request = given()
         .header("Content-Type", "application/json")
-        .body("{\"title\":null}");
+        .body("{\"title\":null,\"description\":\"the book without title\"}");
 
     // when:
     WebTestClientResponse response = given().spec(request)
@@ -183,7 +183,7 @@ public class BooksTest extends BaseProducerTest {
 
     // then:
     assertThat(response.statusCode()).isEqualTo(400);
-  }
+	}
 
 }
 ```
@@ -237,7 +237,6 @@ public class BookApiClient {
 
   private final WebClient client;
 
-  @Autowired
   public BookApiClient(WebClient client) {
     this.client = client;
   }
