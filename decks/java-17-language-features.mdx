@@ -1,0 +1,411 @@
+import testOk from "./contract_test_ok.png";
+import realityFail from "./contract_reality_fail.png";
+
+# Java 17
+
+<Notes>
+
+- since 11
+- language features only
+
+</Notes>
+
+---
+
+## Collectors::teeing (12)
+
+- compose to downstream collectors
+
+```java
+final Stream<Map<String, Object>> items = Stream.of(
+    Map.of("name", "item-1", "price", 19.99),
+    Map.of("name", "item-2", "price", 9.99)
+);
+
+final Map<String, Object> cart = items.collect(Collectors.teeing(
+    Collectors.counting(),
+    Collectors.mapping(
+            item -> BigDecimal.valueOf((Double) item.get("price")),
+            Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
+    ),
+    (amount, total) -> Map.of("amount", amount, "total", total)
+));
+
+System.out.println(cart);
+// {amount=2, total=29.98}
+```
+
+- [with local records](/java-17-language-features/10)
+
+---
+
+## Switch expression (14)
+
+```java
+int numLetters;
+switch (day) {
+    case MONDAY:
+    case FRIDAY:
+    case SUNDAY:
+        numLetters = 6;
+        break;
+    case TUESDAY:
+        numLetters = 7;
+        break;
+    case THURSDAY:
+    case SATURDAY:
+        numLetters = 8;
+        break;
+    case WEDNESDAY:
+        numLetters = 9;
+        break;
+    default:
+        throw new IllegalStateException("Wat: " + day);
+}
+```
+
+```java
+int numLetters = switch (day) {
+    case MONDAY, FRIDAY, SUNDAY -> 6;
+    case TUESDAY                -> 7;
+    case THURSDAY, SATURDAY     -> 8;
+    case WEDNESDAY              -> 9;
+};
+```
+
+---
+
+- **yield** to return from blocks
+- **must** be exhaustive
+
+```java
+int numLetters = switch (day) {
+    case MONDAY, FRIDAY, SUNDAY -> 6;
+    case TUESDAY                -> 7;
+    case THURSDAY, SATURDAY     -> 8;
+    case WEDNESDAY              -> 9;
+    default -> {
+        int length = day.toString().length();
+        yield length;
+    }
+};
+```
+
+- https://openjdk.java.net/jeps/361
+
+---
+
+## Text blocks (15)
+
+- multi-line text blocks without escaping
+- language can be injected in intellij (e.g. JSON)
+
+
+```java
+String json = """
+    {
+      "name": "Alice",
+      "email": "alice@bayes.gg",
+      "address": {
+        "city": "Berlin",
+        "street": "Street of Berlin 13",
+        "zip": "11013"
+      }
+    }
+    """;
+```
+
+---
+
+- **no** interpolation support : (
+
+```java
+String name = "Alice";
+String city = "Berlin";
+
+String json = """
+    {
+      "name": "%s",
+      "email": "alice@bayes.gg",
+      "address": {
+        "city": "%s",
+        "street": "Street of Berlin 13",
+        "zip": "11013"
+      }
+    }
+    """.formatted(name, city);
+```
+
+- https://openjdk.java.net/jeps/378
+
+---
+
+## Records (16)
+
+- transparent carriers for immutable data
+
+```java
+class Point {
+    private final int x;
+    private final int y;
+
+    Point(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    int x() { return x; }
+    int y() { return y; }
+
+    public boolean equals(Object o) {
+        if (!(o instanceof Point)) return false;
+        Point other = (Point) o;
+        return other.x == x && other.y == y;
+    }
+
+    public int hashCode() {
+        return Objects.hash(x, y);
+    }
+
+    public String toString() {
+        return String.format("Point[x=%d, y=%d]", x, y);
+    }
+}
+```
+
+```java
+record Point(int x, int y) { }
+```
+
+<Notes>
+
+Goals
+- Devise an object-oriented construct that expresses a simple aggregation of values.
+- Help developers to focus on modeling immutable data rather than extensible behavior.
+- Automatically implement data-driven methods such as equals and accessors.
+
+</Notes>
+
+---
+
+- compact canonical constructor
+
+```java
+record Range(int lo, int hi) {
+    Range {
+        if (lo > hi)  // referring here to the implicit constructor parameters
+            throw new IllegalArgumentException();
+    }
+}
+```
+
+---
+
+### Restrictions
+
+- A record class declaration does not have an extends clause
+- A record class is implicitly final, and cannot be abstract
+- The fields derived from the record components are final
+- A record class cannot explicitly declare instance fields, and cannot contain instance initializers
+
+---
+
+### A record class...
+
+- can be generic
+- can declare static methods, fields, and initializers
+- can declare instance methods
+- can implement interfaces
+- can declare nested types
+- may be decorated with annotations
+
+---
+
+### Local records
+
+- [teeing sample](/java-17-language-features/1)
+
+```java
+public static void main(String[] args) {
+    record Item(String name, BigDecimal price) {}
+    final Stream<Item> items = Stream.of(
+            new Item("item-1", BigDecimal.valueOf(19.99)),
+            new Item("item-2", BigDecimal.valueOf(9.99))
+    );
+
+    record Cart(long amount, BigDecimal total) {}
+    final Cart cart = items.collect(Collectors.teeing(
+            Collectors.counting(),
+            Collectors.mapping(Item::price, reducing(ZERO, BigDecimal::add)),
+            Cart::new
+    ));
+
+    // Cart[amount=2, total=29.98]
+    System.out.println(cart);
+}
+```
+
+- https://openjdk.java.net/jeps/395
+
+---
+
+## Pattern Matching for instanceof (16)
+
+```java
+if (obj instanceof String) {
+    String s = (String) obj;    // grr...
+    ...
+}
+```
+
+```java
+if (obj instanceof String s && s.length() > 5) {
+    flag = s.contains("jdk");
+}
+```
+
+- https://openjdk.java.net/jeps/394
+
+---
+
+## Stream::toList (16)
+
+```java
+// before java 16
+Stream.of("foo", "bar").collect(Collectors.toList());
+
+// since java 16
+Stream.of("foo", "bar").toList();
+```
+
+---
+
+## Sealed Classes (17)
+
+- A sealed class or interface restricts which other classes or interfaces may extend/implement them
+
+```java
+public sealed interface Shape permits Circle, Rectangle, Square {
+
+    record Circle(float r) implements Shape {}
+    record Rectangle(float a, float b) implements Shape {}
+    record Square(float a) implements Shape {}
+
+}
+```
+
+- better control over possible implementations of a supertype
+- compiler can better reason about exhaustiveness
+
+---
+
+### Exhaustiveness
+
+```java
+public double areaOf(Shape shape) {
+    if (shape instanceof Circle circle) {
+        return Math.PI * circle.r() * circle.r();
+    } else if (shape instanceof Rectangle rectangle) {
+        return rectangle.a() * rectangle.b();
+    } else if (shape instanceof Square square) {
+        return square.a() * square.a();
+    } else {
+        throw new IllegalStateException();
+    }
+}
+```
+
+```java
+// not there yet in java 17 still in preview
+public double areaOf(Shape shape) {
+    return switch (shape) {
+        case Circle circle -> Math.PI * circle.r() * circle.r();
+        case Rectangle rectangle -> rectangle.a() * rectangle.b();
+        case Square square -> square.a() * square.a();
+        // no default needed
+    };
+}
+```
+
+---
+
+### No deconstruction patterns yet
+
+```java
+// is planned for the future
+public double areaOf(Shape shape) {
+    return switch (shape) {
+        case Circle(float r) -> Math.PI * r * r;
+        case Rectangle(float a, float b) -> a * b;
+        case Square(float a) -> a * a;
+    };
+}
+```
+
+---
+
+### Another example
+
+```java
+interface Future<V> {
+    ...
+    V get(long timeout, TimeUnit unit)
+        throws InterruptedException, ExecutionException, TimeoutException;
+}
+```
+
+```java
+try {
+    V v = future.get();
+    // handle normal completion
+}
+catch (TimeoutException e) {
+    // handle timeout
+}
+catch (InterruptedException e) {
+    // handle cancelation
+}
+catch (ExecutionException e) {
+    Throwable cause = e.getCause();
+    // handle task failure
+}
+```
+
+---
+
+### With sealed classes
+
+```java
+interface Future<V> {
+    AsyncReturn<V> get();
+}
+
+sealed interface AsyncReturn<V> {
+    record Success<V>(V result) implements AsyncReturn<V> { }
+    record Failure<V>(Throwable cause) implements AsyncReturn<V> { }
+    record Timeout<V>() implements AsyncReturn<V> { }
+    record Interrupted<V>() implements AsyncReturn<V> { }
+}
+```
+
+```java
+// with future version
+switch (future.get()) {
+    case Success success -> System.out.println("success");
+    case Failure failure -> System.out.println("failure");
+    case Timeout timeout -> System.out.println("timeout");
+    case Interrupted interrupted -> System.out.println("interrupted");
+}
+```
+
+- https://openjdk.java.net/jeps/409
+
+
+---
+
+## Links
+
+- https://slides.nipafx.dev/java-after-eight/index.html
+- https://docs.oracle.com/en/java/javase/15/text-blocks/index.html
+- https://www.infoq.com/articles/java-sealed-classes/
+- https://cr.openjdk.java.net/~briangoetz/amber/pattern-match.html
