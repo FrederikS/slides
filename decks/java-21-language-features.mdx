@@ -1,0 +1,400 @@
+import sequencedInterfaces from "./sequences_interfaces.png";
+import Notes from "gatsby-theme-mdx-deck/src/components/notes";
+
+# Java 21
+
+<Notes>
+
+- was release on the 19th of September
+- is now the newest LTS release
+- since 17
+- language features only
+
+</Notes>
+
+---
+
+## Virtual Threads
+
+<Notes>
+
+Motivation:
+- Java's traditional threading model ties a jdk thread 1-to-1 to a OS/platform thread (Wrapper)
+- OS/platform threads are costly and limited, which is not ideal for e.g. thread-per-request implementations
+- Number of thread often becomes the limiting factor long before other resources, such as CPU or network connections, are exhausted
+- Current implementation caps the application throughput to a level below what the hardware can actually support
+
+Goals:
+- Enable server applications written in the simple thread-per-request style to scale with near-optimal hardware utilization
+- Enable existing code that uses the java.lang.Thread API to adopt virtual threads with minimal change
+- Enable easy troubleshooting, debugging, and profiling of virtual threads with existing JDK tools
+
+</Notes>
+
+---
+
+```java
+public void getCredentialsWithCallback(String login, Handler<AsyncResult<Credentials>> resultHandler) {
+    client.prepare("""
+            SELECT user_id, password FROM app.credentials
+            WHERE provider = :provider AND login = :login
+            """, statementHandler -> {
+        if (statementHandler.succeeded()) {
+            PreparedStatement statement = statementHandler.result();
+            client.execute(statement.bind().setString("login", login), selectHandler -> {
+                if (selectHandler.succeeded()) {
+                    ResultSet resultSet = selectHandler.result();
+                    resultSet.one(fetchHandler -> {
+                        if (fetchHandler.succeeded()) {
+                            Row row = fetchHandler.result();
+                            if (row == null) {
+                                resultHandler.handle(Future.failedFuture(new NoSuchElementException("Wrong login or password")));
+                            } else {
+                                Credentials credentials = new Credentials();
+                                credentials.setLogin(login);
+                                credentials.setPassword(row.getString("password"));
+                                credentials.setUserId(row.getUUID("user_id"));
+                                resultHandler.handle(Future.succeededFuture(credentials));
+                            }
+                        } else {
+                            resultHandler.handle(Future.failedFuture(fetchHandler.cause()));
+                        }
+                    });
+                } else {
+                    resultHandler.handle(Future.failedFuture(selectHandler.cause()));
+                }
+            });
+        } else {
+            resultHandler.handle(Future.failedFuture(statementHandler.cause()));
+        }
+    });
+}
+```
+
+<Notes>
+
+- Favors thread-sharing over thread-per-request style
+- Request-handling code returns its thread to a pool when it waits for another I/O operation to complete so it can be re-used in the meantime
+- Allows a high number of concurrent operations without consuming a high number of threads
+- But it comes at a high price:
+    - Code needs to be broken down to a set of I/O methods that do not wait and instead signal their completion to a callback function (e.g. CompletableFuture API or other reactive frameworks)
+    - Typically split into multiple lambdas which are composed into a sequential pipeline, where each part could be handled in a different thread
+    - Cannot use basic language constructs for sequential composition like loops and also no try/catch blocks
+    - Require high cognitive load, code harder to understand (callback hell), Stack traces provide no usable context, debuggers cannot step through request handling logic, existing profilers cannot associate operations cost
+
+</Notes>
+
+---
+
+> Virtual threads are lightweight threads that dramatically reduce the effort
+> of writing, maintaining, and observing high-throughput concurrent applications.
+
+<Notes>
+
+How to achieve these goals?
+- adding an more efficient implementation `VirtualThread` to the java runtime extending the existing `Thread` api which is not tied to a particular OS thread
+- this way application code in the thread-per-request style can run in a virtual thread for the entire duration of the request, but the virtual thread consumes an OS thread only while it performs calculations on the CPU
+- this is results in the same scalability of the asynchronous style, except it is achieved transparently
+- virtual threads are simply threads that are cheap to create and almost plentiful, hardware utilization is close to optimal, while the application still benefits from the original multithreaded design of the java platform and its tooling (stack traces, profiling etc.)
+
+</Notes>
+
+---
+
+## Creation via ThreadBuilder
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+        Thread virtualThread = Thread.ofVirtual().start(() -> {
+            System.out.println("I'm running in a virtual Thread");
+        });
+
+        Thread platformThread = Thread.ofPlatform().start(() -> {
+            System.out.println("I'm running in a platform Thread");
+        });
+
+        virtualThread.join();
+        platformThread.join();
+    }
+
+}
+
+```
+
+---
+
+## Usage via Executor
+
+```java
+import java.util.concurrent.Executors;
+
+public class Main {
+
+    public static void main(String[] args) {
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            IntStream.range(0, 100_000).forEach(i -> executor.submit(() -> {
+                System.out.println("Running task: " + i);
+            }));
+        }
+    }
+
+}
+```
+
+- https://openjdk.org/jeps/444
+
+<Notes>
+
+- Since it is based on the existing concurrency model, existing code can almost immediately benefit from it
+
+</Notes>
+
+---
+
+## Record Patterns
+
+```java
+public class RecordPatterns {
+
+    sealed interface Shape permits Rectangle, Square {}
+    record Square(int a) implements Shape {}
+    record Rectangle(int a, int b) implements Shape {}
+
+    private static int areaOf(Shape shape) {
+        if (shape instanceof Square(int a)) {
+            return a * a;
+        } else if (shape instanceof Rectangle(int a, int b)) {
+            return a * b;
+        } else {
+            throw new IllegalArgumentException();
+        }
+    }
+
+}
+```
+
+- https://openjdk.org/jeps/440
+
+---
+
+## Sneak Peek: Unnamed Patterns and Variables
+
+```java
+public class RecordPatterns {
+
+    sealed interface Shape permits Rectangle, Square {}
+    record Square(int a, String color) implements Shape {}
+    record Rectangle(int a, int b, String color) implements Shape {}
+
+    private static int areaOf(Shape shape) {
+        if (shape instanceof Square(int a, _)) {
+            return a * a;
+        } else if (shape instanceof Rectangle(int a, int b, _)) {
+            return a * b;
+        } else {
+            throw new IllegalArgumentException();
+        }
+    }
+
+}
+```
+
+- https://openjdk.org/jeps/443
+
+<Notes>
+
+- Improve the readability of record patterns by eliding unnecessary nested patterns
+- Improve the maintainability of all code by identifying variables that must be declared (e.g., in a catch clause) but will not be used
+
+</Notes>
+
+---
+
+## Pattern Matching
+
+```java
+public class PatternMatching {
+
+    sealed interface Shape permits Rectangle, Square {}
+    record Square(int a) implements Shape {}
+    record Rectangle(int a, int b) implements Shape {}
+
+    private static int areaOf(Shape shape) {
+        // checks for exhaustiveness no exception throwing needed
+        return switch (shape) {
+            case Square square -> square.a() * square.a();
+            case Rectangle rectangle -> rectangle.a() * rectangle.b();
+        };
+    }
+
+}
+```
+
+- https://openjdk.org/jeps/441
+
+---
+
+## Pattern Matching with Record Patterns
+
+```java
+private static int areaOf(Shape shape) {
+    return switch (shape) {
+        case Square(int a) -> a * a;
+        case Rectangle(int a, int b) -> a * b;
+    };
+}
+```
+
+---
+
+## Switches and null
+
+```java
+// Prior to Java 21
+static void testFooBarOld(String s) {
+    if (s == null) {
+        System.out.println("Oops!");
+        return;
+    }
+    switch (s) {
+        case "Foo", "Bar" -> System.out.println("Great");
+        default           -> System.out.println("Ok");
+    }
+}
+
+// As of Java 21
+static void testFooBarNew(String s) {
+    switch (s) {
+        case null         -> System.out.println("Oops");
+        case "Foo", "Bar" -> System.out.println("Great");
+        default           -> System.out.println("Ok");
+    }
+}
+```
+
+---
+
+## Guarded case labels
+
+```java
+// As of Java 21
+static void testStringOld(String response) {
+    switch (response) {
+        case null -> { }
+        case String s -> {
+            if (s.equalsIgnoreCase("YES"))
+                System.out.println("You got it");
+            else if (s.equalsIgnoreCase("NO"))
+                System.out.println("Shame");
+            else
+                System.out.println("Sorry?");
+        }
+    }
+}
+
+// As of Java 21
+static void testStringNew(String response) {
+    switch (response) {
+        case null -> { }
+        case String s when s.equals("YES") -> System.out.println("You got it");
+        case String s when s.equals("NO") -> System.out.println("Shame");
+        case String s -> System.out.println("Sorry?");
+    }
+}
+```
+
+---
+
+## Sequenced Collections
+
+<img src={sequencedInterfaces} style={{ width: "80vw" }} />
+
+<Notes>
+
+- Java’s collections framework lacks a collection type that represents a sequence of elements with a defined encounter order
+- It also lacks a uniform set of operations that apply across such collections
+- e.g. List or Deque both define an encounter order, but their common super type is `Collection`, which does not
+
+</Notes>
+
+---
+
+## Sequenced Collection Interface
+
+```java
+interface SequencedCollection<E> extends Collection<E> {
+    // new method
+    SequencedCollection<E> reversed();
+    // methods promoted from Deque
+    void addFirst(E e);
+    void addLast(E e);
+    E getFirst();
+    E getLast();
+    E removeFirst();
+    E removeLast();
+}
+```
+
+```java
+Collections.unmodifiableSequencedCollection(sequencedCollection)
+Collections.unmodifiableSequencedSet(sequencedSet)
+Collections.unmodifiableSequencedMap(sequencedMap)
+```
+
+<Notes>
+
+- new methods to the Collections utility class to create unmodifiable wrappers for the three new types
+
+</Notes>
+
+---
+
+## Sneak Peek: String Templates
+
+```java
+String title = "My Web Page";
+String text  = "Hello, world";
+
+String html = STR."""
+        <html>
+          <head>
+            <title>\{title}</title>
+          </head>
+          <body>
+            <p>\{text}</p>
+          </body>
+        </html>
+    """;
+
+double result = 3.666666666666666;
+String formattedResult = FMT."Result is: %.2f\{result}";
+```
+
+- Multiple Processors exist: `STR`, `RAW`, `FMT`
+- Custom Template Processors can be implemented via the `StringTemplate.Processor` interface
+
+
+- https://openjdk.org/jeps/430
+
+<Notes>
+
+The template expression consists of:
+1. A template processor (`STR` is a public static final field that is automatically imported into every Java source file)
+2. A dot character (U+002E), as seen in other kinds of expressions;
+3. A template (`"My name is \{name}"`) which contains an embedded expression (`\{name}`).
+
+- `STR` for basic string interpolation with validation (e.g. for balanced quotes)
+- `RAW` returning a `StringTemplate` instead of `String` (use when processing should be delayed)
+- `FMT` also interprets format specifiers which appear to the left of embedded expressions, same as `java.util.Formatter`
+- user-defined Processor e.g. in case inputs need to be sanitized according to additional language rules (SQL, JSON etc.)
+
+</Notes>
+
+---
+
+## Links
+
+- https://openjdk.org/projects/jdk/21/
+- https://blog.rockthejvm.com/ultimate-guide-to-java-virtual-threads/
